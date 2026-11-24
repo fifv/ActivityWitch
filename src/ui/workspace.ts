@@ -9,9 +9,9 @@ const metricDefs: [string, Icon, string, string][] = [
     'Time marked active by the presence watcher.',
   ],
   [
-    'Away time',
+    'Idle time',
     'away',
-    'amber',
+    'idle',
     'Time marked away by the presence watcher. Unobserved time is excluded.',
   ],
   [
@@ -43,15 +43,16 @@ export function mountWorkspace(root: HTMLElement) {
 <nav aria-label="Workspace"><button id="nav-timeline">${icon('timeline')}Timeline</button><button id="nav-events">${icon('list')}Event log</button></nav>
 <div class="mast-right"><span class="readonly">${icon('lock', 13)}Read-only</span><button id="connection" title="ActivityWatch connection details"><i class="status-dot"></i><span id="status">Connecting</span>${icon('down', 12)}</button></div></header>
 <main>
-<div class="workspace-head"><div><h1 id="page-title">Activity timeline</h1><div id="date-caption" class="caption"></div></div>
-<div class="tools"><div class="period-toggle" aria-label="Time period"><button id="period-day">Day</button><button id="period-week">Week</button></div><label class="device field">${icon('monitor')}<select id="device" aria-label="Device"><option>Local device</option></select>${icon('down', 12)}</label>
+<div class="workspace-head"><div><h1 id="page-title">Activity timeline</h1><button id="date-caption" class="caption" type="button" disabled></button></div>
+<div class="tools"><div id="weekly-layout" class="week-layout" aria-label="Weekly layout" hidden><button id="layout-titles">${icon('list', 15)}Window titles</button><button id="layout-overview">${icon('layers', 15)}Overview</button></div><div class="period-toggle" aria-label="Time period"><button id="period-day">Day</button><button id="period-week">Week</button></div><label class="device field">${icon('monitor')}<select id="device" aria-label="Device"><option>Local device</option></select>${icon('down', 12)}</label>
 <div class="date-group">${button('prev', 'left', 'Previous day')}<button class="date-trigger" id="open-date" aria-expanded="false">${icon('calendar')}<span id="date-label">Today</span></button>${button('next', 'right', 'Next day')}
 <div id="date-pop" class="popover" hidden><label for="date-input">Go to date</label><input type="date" id="date-input"><button id="today" class="soft">Today</button></div></div>
 ${button('reload', 'refresh', 'Refresh ActivityWatch data')}</div></div>
 <div id="notice" role="status" hidden></div>
+<div class="workspace-content"><section id="title-board" hidden></section>
 <div id="timeline-view">
 <section class="metrics" aria-label="Activity summary">${metricDefs.map(([label, name, tone, help], i) => '<div class="metric ' + tone + '" title="' + help + '"><div class="metric-label"><span class="metric-icon">' + icon(name, 15) + '</span>' + label + '</div><div class="metric-base"><strong id="metric-' + i + '">—</strong><svg id="spark-' + i + '" viewBox="0 0 82 24" aria-hidden="true"></svg></div></div>').join('')}</section>
-<section class="map-panel"><div class="map-head"><h2>${icon('layers', 18)}<span id="map-title">Week map</span></h2><div class="map-actions"><label id="week-source-field" class="source-select"><select id="week-source" aria-label="Week map activity source"></select>${icon('down', 12)}</label><button id="reset-range" hidden>${icon('reset', 13)}Reset zoom</button><div class="segment" id="day-modes"><button id="recorded">Recorded hours</button><button id="full-day">24 hours</button></div></div></div>
+<section class="map-panel"><div class="map-head"><h2>${icon('layers', 18)}<span id="map-title">Week map</span><time id="map-date" hidden></time><button type="button" id="day-map-back" title="Return to week view" aria-label="Day map, return to week view" hidden></button></h2><div class="map-actions"><label id="week-source-field" class="source-select"><select id="week-source" aria-label="Week map activity source"></select>${icon('down', 12)}</label><button id="reset-range" hidden>${icon('reset', 13)}Reset zoom</button><div class="segment" id="day-modes"><button id="recorded">Recorded hours</button><button id="full-day">24 hours</button></div></div></div>
 <div id="map"></div><div id="week-map"></div><div class="map-foot"><div id="legend"></div><span class="gesture" id="map-hint"></span></div></section>
 </div>
 <div id="panels">
@@ -67,7 +68,7 @@ ${button('reload', 'refresh', 'Refresh ActivityWatch data')}</div></div>
 <div class="search-line"><label class="search field">${icon('search', 15)}<input id="search" type="text" placeholder="Find an event…" aria-label="Find an event">${button('clear-search', 'close', 'Clear search')}</label><button id="app-filter" class="chip" hidden></button></div>
 <div class="event-cols"><span>Time</span><span>Activity</span><span class="source-cell">Source</span><span>Duration</span></div>
 <div id="list-wrap"><div id="list"></div><div id="list-empty" class="empty" hidden></div></div></section>
-</div></main>
+</div></div></main>
 <footer><span>${icon('server', 13)}<span id="foot-server">ActivityWatch</span></span><span id="foot-range"></span></footer>
-<dialog id="dialog"><div class="dialog-head"><h2 id="dialog-title"></h2>${button('close-dialog', 'close', 'Close dialog')}</div><div id="dialog-body"></div></dialog>`
+<aside id="entry-popup" aria-labelledby="details-label" hidden><div class="details-head"><span id="details-label"></span>${button('close-details', 'close', 'Dismiss details')}</div><div id="details-body"></div></aside>`
 }

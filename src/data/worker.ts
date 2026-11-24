@@ -11,6 +11,8 @@ import {
 } from './model'
 import { getDays, putDays, getOverview, putOverview } from './day-cache'
 import { aggregateWeek } from './weekly'
+import { buildTitleWeek, titleBuffers } from './titles'
+import { buildPresenceWeek } from './presence'
 import type { Request } from './worker-client'
 let controller: AbortController | undefined
 let context = 0,
@@ -41,6 +43,8 @@ async function load(msg: Extract<Request, { type: 'load' }>, id: number) {
   ])
   const weekKey = prefix + weekStart(first)
   if (
+    !msg.titles &&
+    !msg.presenceOnly &&
     !msg.refresh &&
     lastWeek?.key === weekKey &&
     Date.now() - lastWeek.data.fetched < 30000
@@ -52,9 +56,12 @@ async function load(msg: Extract<Request, { type: 'load' }>, id: number) {
       ? { week: lastWeek.overview, context }
       : { day: sliceDay(lastWeek.data, bounds(first)), context }
   }
-  if (msg.weekly && !msg.refresh) {
+  if (msg.weekly && !msg.titles && !msg.presenceOnly && !msg.refresh) {
     const cached = await getOverview(weekKey)
-    if (cached && !active.signal.aborted)
+    if (
+      cached?.rows.every((row) => Array.isArray(row.coverage)) &&
+      !active.signal.aborted
+    )
       self.postMessage({ id, preview: cached })
   }
   const days = msg.refresh
@@ -83,8 +90,13 @@ async function load(msg: Extract<Request, { type: 'load' }>, id: number) {
   }
   active.signal.throwIfAborted()
   if (fresh.size) void putDays(prefix, fresh).catch(() => {})
+  if (msg.presenceOnly) return { presence: buildPresenceWeek(days), context }
   context = id
   matches = []
+  if (msg.titles) {
+    current = []
+    return { titles: buildTitleWeek(first, days), context }
+  }
   if (!msg.weekly) {
     current = []
     if (msg.refresh) lastWeek = undefined
@@ -128,7 +140,17 @@ self.onmessage = async ({ data }: { data: { id: number; msg: Request } }) => {
       controller?.abort()
       return
     }
-    if (msg.type === 'load') result = await load(msg, id)
+    if (msg.type === 'load') {
+      const loaded = await load(msg, id)
+      if (loaded.titles) {
+        self.postMessage(
+          { id, result: loaded },
+          { transfer: titleBuffers(loaded.titles) },
+        )
+        return
+      }
+      result = loaded
+    }
     if (msg.type === 'filter') {
       const terms = msg.search.trim().toLowerCase()
       if (msg.context !== context) matches = []

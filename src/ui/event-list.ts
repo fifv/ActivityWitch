@@ -7,6 +7,8 @@ import {
   type Range,
 } from '../data/model'
 import { esc, icon } from './icons'
+import { durationMeter } from './duration-meter'
+import { bindEntryDetails } from './entry-popup'
 const rowHeight = 44
 const shortDate = new Intl.DateTimeFormat('en-US', {
   weekday: 'short',
@@ -24,20 +26,16 @@ export class EventList {
   private last = ''
   constructor(
     private viewport: HTMLElement,
-    inspect: (e: Entry) => void,
+    inspect: (e: Entry, anchor: HTMLElement, pinned: boolean) => void,
   ) {
     this.body.className = 'virtual-body'
     viewport.append(this.body)
     viewport.onscroll = () => this.draw()
     new ResizeObserver(() => this.draw()).observe(viewport)
-    this.body.onclick = (event) => {
-      const button = (event.target as Element).closest<HTMLElement>(
-        '[data-index]',
-      )
-      const entry =
-        button && this.rows[Number(button.dataset.index) - this.offset]
-      if (entry) inspect(entry)
-    }
+    bindEntryDetails(this.body, '[data-index]', (row, pin) => {
+      const entry = this.rows[Number(row.dataset.index) - this.offset]
+      if (entry) inspect(entry, row, pin)
+    })
     this.body.onkeydown = async (e) => {
       const target = (e.target as HTMLElement).closest<HTMLElement>(
         '[data-index]',
@@ -138,6 +136,9 @@ export class EventList {
           esc(kindNames[e.kind]) +
           '</span><span class="numeric">' +
           duration(
+            Math.min(e.end, this.range[1]) - Math.max(e.start, this.range[0]),
+          ) +
+          durationMeter(
             Math.min(e.end, this.range[1]) - Math.max(e.start, this.range[0]),
           ) +
           '</span></button>',

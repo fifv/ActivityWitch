@@ -1,5 +1,7 @@
 import type { Bucket, Day, Entry } from './model'
 import type { WeekSummary } from './weekly'
+import type { TitleWeek } from './titles'
+import type { PresenceWeek } from './presence'
 export type Request =
   | {
       type: 'load'
@@ -7,6 +9,8 @@ export type Request =
       date: string
       buckets: Bucket[]
       weekly: boolean
+      titles?: boolean
+      presenceOnly?: boolean
       refresh: boolean
     }
   | {
@@ -19,6 +23,8 @@ export type Request =
   | { type: 'page'; start: number; end: number; filter: number }
   | { type: 'cancel' }
 export interface Loaded {
+  presence?: PresenceWeek
+  titles?: TitleWeek
   day?: Day
   week?: WeekSummary
   context: number

@@ -1,6 +1,7 @@
 import { bounds, color, duration, type Lane } from '../data/model'
 import { slots, type WeekSummary } from '../data/weekly'
 import { esc, icon } from './icons'
+import { drawPresenceBand } from './presence-band'
 const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
 const labelTime = (slot: number) =>
   String(Math.floor(slot / 4)).padStart(2, '0') +
@@ -40,17 +41,32 @@ export class WeekMap {
           Math.floor(((e.clientX - rect.left) / rect.width) * slots),
         ),
       )
-      const name = row.lanes[this.lane?.id ?? '']?.[slot]
+      let name = row.lanes[this.lane?.id ?? '']?.[slot]
+      if (this.lane?.kind === 'presence') {
+        const minutes = ((e.clientX - rect.left) / rect.width) * 1440
+        const span = (row.coverageByLane?.[this.lane.id] ?? row.coverage).find(
+          (s) => s.from <= minutes && minutes < s.until,
+        )
+        name = span ? (span.idle ? 'Idle' : 'Active') : null
+      }
       this.tip.textContent =
         labelTime(slot) +
         '–' +
         labelTime(slot + 1) +
         ' · ' +
-        (name ?? 'No activity') +
+        (name ?? 'No data') +
+        (row.awayMs[slot] ? ' · ' + duration(row.awayMs[slot]) + ' idle' : '') +
         (row.activeMs[slot]
           ? ' · ' + duration(row.activeMs[slot]) + ' active'
           : '')
       this.tip.hidden = false
+      const detail = row.details?.[this.lane?.id ?? '']?.[slot]
+      if (detail) {
+        const title = document.createElement('strong')
+        title.className = 'map-tip-title'
+        title.textContent = detail
+        this.tip.append(title)
+      }
       const box = this.root.getBoundingClientRect()
       this.tip.style.left =
         Math.max(
@@ -60,7 +76,8 @@ export class WeekMap {
             e.clientX - box.left + 8,
           ),
         ) + 'px'
-      this.tip.style.top = Math.max(0, e.clientY - box.top - 30) + 'px'
+      this.tip.style.top =
+        Math.max(0, e.clientY - box.top - this.tip.offsetHeight - 8) + 'px'
     }
   }
   update(data: WeekSummary, lane: Lane | undefined, today: string) {
@@ -118,12 +135,16 @@ export class WeekMap {
         row = data.rows[i],
         cells = row.lanes[this.lane?.id ?? ''] || []
       ctx.scale(dpr, dpr)
-      ctx.fillStyle = '#30384c'
-      ctx.fillRect(0, 1, w, 15)
-      ctx.fillStyle = '#2b3345'
-      ctx.fillRect(0, 18, w, 3)
+      if (this.lane?.kind === 'presence')
+        drawPresenceBand(
+          ctx,
+          row.coverageByLane?.[this.lane.id] ?? row.coverage,
+          w,
+          1,
+          15,
+        )
       const pos = (s: number) => Math.round((s * w) / slots)
-      for (let s = 0; s < cells.length;) {
+      for (let s = 0; this.lane?.kind !== 'presence' && s < cells.length;) {
         const name = cells[s],
           start = s++
         while (s < cells.length && cells[s] === name) s++
@@ -138,17 +159,7 @@ export class WeekMap {
           ctx.fillText(name, x + 4, 12)
         }
       }
-      for (let s = 0; s < slots; s++) {
-        const active = row.activeMs[s],
-          away = row.awayMs[s]
-        if (active + away === 0) continue
-        const x = pos(s),
-          width = pos(s + 1) - x
-        ctx.fillStyle = color('Away')
-        ctx.fillRect(x, 18, width, 3)
-        ctx.fillStyle = color('Active')
-        ctx.fillRect(x, 18, (width * active) / (active + away), 3)
-      }
+      drawPresenceBand(ctx, row.coverage, w, 18, 3)
       ctx.fillStyle = 'rgba(211,222,244,.15)'
       for (let t = 0; t <= 6; t++)
         ctx.fillRect(Math.min(w - 1, Math.round((w * t) / 6)), 0, 1, h)

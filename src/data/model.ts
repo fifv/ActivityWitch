@@ -48,7 +48,7 @@ export const palette = [
 ]
 const colorMap: Record<string, string> = {
   Active: '#54c5a4',
-  Away: '#6c778e',
+  Away: '#999999',
   Firefox: '#f19a65',
   Chrome: '#72b99a',
   'VS Code': '#69a9e4',

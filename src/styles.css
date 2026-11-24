@@ -263,6 +263,8 @@ select {
 }
 .date-group {
   position: relative;
+  width: 160px;
+  flex: 0 0 160px;
 }
 .icon-button {
   height: 35px;
@@ -283,11 +285,54 @@ select {
   background: transparent;
 }
 .date-trigger {
+  flex: 1;
   height: 33px;
   min-width: 83px;
   padding: 0 7px;
   font-weight: 540;
   font-size: 12px;
+}
+:root {
+  scrollbar-gutter: stable;
+}
+.duration-meter {
+  display: block;
+  position: relative;
+  background: #e9eaf3;
+  border-radius: 2px;
+  height: 5px;
+  overflow: hidden;
+}
+.duration-meter > i {
+  display: block;
+  height: 100%;
+  min-width: 1px;
+  background: #8576cb;
+}
+.duration-meter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to right,
+    transparent 0 calc(20% - 1px),
+    #ffffffbc calc(20% - 1px) 20%
+  );
+}
+.duration-meter.moment > i {
+  width: 5px !important;
+  border-radius: 50%;
+  border: 1px solid #838ba3;
+  background: white;
+}
+.duration-meter.moment {
+  background: transparent;
+}
+.duration-meter.moment::after {
+  display: none;
+}
+.event-row .duration-meter {
+  margin-top: 3px;
 }
 .popover {
   position: absolute;
@@ -342,9 +387,9 @@ select {
   --accent: #348c76;
   --tint: #e8f5ef;
 }
-.metric.amber {
-  --accent: #bb8741;
-  --tint: #fbf3e6;
+.metric.idle {
+  --accent: var(--presence-idle);
+  --tint: #f0f0f0;
 }
 .metric.blue {
   --accent: #5789b9;
@@ -397,7 +442,31 @@ select {
   gap: 8px;
 }
 .map-head {
+  position: relative;
   padding: 15px 19px 13px;
+}
+#day-map-back {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+}
+.map-head:has(#day-map-back:is(:hover, :focus-visible)) {
+  background: #2d354a;
+}
+#day-map-back:focus-visible {
+  outline: 1px solid var(--focus);
+  outline-offset: -1px;
+}
+.map-head .map-actions {
+  position: relative;
+  pointer-events: none;
+}
+.map-head .map-actions :is(button, label, select) {
+  pointer-events: auto;
 }
 h2 {
   font-size: 16px;
@@ -475,6 +544,7 @@ h2 > svg {
   touch-action: pan-y;
 }
 .map-tip {
+  flex-wrap: wrap;
   pointer-events: none;
   position: absolute;
   max-width: min(340px, 90%);
@@ -505,7 +575,6 @@ h2 > svg {
 }
 #legend span,
 .rank-line > span,
-.dialog-head,
 h3 {
   display: flex;
   align-items: center;
@@ -787,31 +856,56 @@ footer {
   color: #747d90;
   background: #f9fafc;
 }
-dialog {
-  width: min(495px, calc(100vw - 24px));
-  max-height: 80dvh;
-  background: white;
+#entry-popup {
+  position: fixed;
+  z-index: 20;
+  overflow: auto;
+  pointer-events: none;
+  width: min(350px, calc(100vw - 16px));
+  max-height: 48dvh;
+  background: #fffffff7;
   border: 1px solid #d8dce8;
   border-radius: 10px;
   padding: 0;
   color: inherit;
-  box-shadow: 0 15px 70px #151b3138;
+  box-shadow: 0 4px 18px #1a203221;
 }
-dialog::backdrop {
-  background: #1920384f;
+#entry-popup[data-pinned='true'] {
+  pointer-events: auto;
+  user-select: text;
 }
-.dialog-head {
+.details-head {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: #697184;
+  font-weight: 560;
   justify-content: space-between;
-  padding: 12px 17px;
-  border-bottom: 1px solid var(--line);
+  padding: 8px 12px 0;
 }
-.dialog-head button {
+.details-head button {
   width: 28px;
   height: 28px;
 }
-#dialog-body {
-  padding: 16px 18px;
+#details-body {
+  padding: 7px 12px 13px;
   overflow-wrap: anywhere;
+}
+#details-body h3 {
+  font-size: 14px;
+  line-height: 1.35;
+  margin-bottom: 9px;
+  white-space: pre-wrap;
+  user-select: text;
+}
+#details-body dl {
+  grid-template-columns: 85px 1fr;
+  font-size: 12px;
+  gap: 4px 10px;
+}
+#details-body pre {
+  max-height: 16vh;
+  margin-bottom: 0;
 }
 h3 {
   font-size: 17px;
@@ -1034,6 +1128,28 @@ pre {
   }
   .map-panel .gesture {
     display: none;
+  }
+}
+.map-tip-title {
+  flex-basis: 100%;
+  white-space: pre-wrap;
+  font-weight: 550;
+}
+#map-date {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  color: #cad2e5;
+}
+@media (max-width: 620px) {
+  .map-head:has(#map-date:not([hidden])) h2 {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1px 6px;
+  }
+  #map-date {
+    grid-column: 1 / -1;
+    font-size: 11px;
   }
 }
 

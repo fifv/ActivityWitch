@@ -6,13 +6,17 @@ import {
   type Entry,
   type Lane,
 } from './model.ts'
+import { buildPresenceSpans, type PresenceSpan } from './presence.ts'
 export const slots = 96
 export const slotMs = 900000
 export interface WeekRow {
   date: string
   active: number
   presence: boolean
+  coverage: PresenceSpan[]
+  coverageByLane?: Record<string, PresenceSpan[]>
   lanes: Record<string, (string | null)[]>
+  details?: Record<string, (string | null)[]>
   activeMs: number[]
   awayMs: number[]
 }
@@ -49,11 +53,27 @@ export function aggregateWeek(data: Day, monday: string): WeekSummary {
       date,
       active: summary.active,
       presence: records.some((e) => e.kind === 'presence'),
+      coverage: buildPresenceSpans(records, range),
       lanes: Object.create(null),
+      details: Object.create(null),
       activeMs: Array(slots).fill(0),
       awayMs: Array(slots).fill(0),
     }
-    const weights = new Map<string, Map<string, number>[]>()
+    const weights = new Map<
+      string,
+      Map<string, { ms: number; longest: number; detail: string }>[]
+    >()
+    const presenceLanes = data.lanes.filter((l) => l.kind === 'presence')
+    if (presenceLanes.length > 1)
+      row.coverageByLane = Object.fromEntries(
+        presenceLanes.map((l) => [
+          l.id,
+          buildPresenceSpans(
+            records.filter((e) => e.lane === l.id),
+            range,
+          ),
+        ]),
+      )
     const presenceEnd = new Map<string, number>()
     const offset = new Date(start).getTimezoneOffset()
     const steady = offset === new Date(end - 1).getTimezoneOffset()
@@ -77,7 +97,16 @@ export function aggregateWeek(data: Day, monday: string): WeekSummary {
         const n = Math.min(stop - t, slotMs - (wall % slotMs))
         if (slot >= 0 && slot < slots) {
           const cell = lane[slot]
-          cell.set(e.label, (cell.get(e.label) || 0) + n)
+          let weight = cell.get(e.label)
+          if (!weight) {
+            weight = { ms: 0, longest: 0, detail: '' }
+            cell.set(e.label, weight)
+          }
+          weight.ms += n
+          if (n > weight.longest) {
+            weight.longest = n
+            weight.detail = e.detail
+          }
           const observed = Math.max(0, t + n - Math.max(t, prior))
           if (e.kind === 'presence' && e.label === 'Active')
             row.activeMs[slot] += observed
@@ -87,17 +116,21 @@ export function aggregateWeek(data: Day, monday: string): WeekSummary {
         t += n
       }
     }
-    for (const [id, cells] of weights)
+    for (const [id, cells] of weights) {
+      const details: (string | null)[] = []
       row.lanes[id] = cells.map((cell) => {
         let label: string | null = null,
           max = 0
-        for (const [name, ms] of cell)
+        for (const [name, { ms }] of cell)
           if (ms > max) {
             label = name
             max = ms
           }
+        details.push(label ? cell.get(label)!.detail || null : null)
         return label
       })
+      if (details.some(Boolean)) row.details![id] = details
+    }
     rows.push(row)
     ;[
       summary.active,

@@ -1,4 +1,5 @@
 import { mountWorkspace } from './ui/workspace'
+import { EntryPopup } from './ui/entry-popup'
 import './styles.css'
 import { discover, api } from './data/api'
 import {
@@ -28,6 +29,9 @@ import {
 } from './data/worker-client'
 import { aggregateWeek, type WeekSummary } from './data/weekly'
 import { WeekMap } from './ui/week-map'
+import { TitleBoard } from './ui/title-board'
+import type { TitleWeek } from './data/titles'
+import './title-board.css'
 import { cached, readSetting, remember, save } from './data/storage'
 import { DayMap } from './ui/day-map'
 import { EventList } from './ui/event-list'
@@ -44,6 +48,10 @@ let query = readSetting('search', '')
 let source = readSetting<Kind | ''>('source', '')
 let appFilter = ''
 let period = readSetting<'week' | 'day'>('period', 'week')
+let layout = readSetting<'titles' | 'overview'>('weekly-layout', 'titles')
+let titleData: TitleWeek | undefined
+const showingTitles = () =>
+  period === 'week' && tab === 'timeline' && layout === 'titles'
 let week: WeekSummary | undefined,
   workerContext = 0,
   filterSequence = 0
@@ -66,6 +74,8 @@ const key = () =>
     period === 'week' ? weekStart(date) : date,
   ])
 mountWorkspace(byId('app'))
+document.documentElement.style.setProperty('--presence-idle', color('Away'))
+document.documentElement.style.setProperty('--presence-active', color('Active'))
 
 const list = new EventList(byId('list'), inspect)
 const map = new DayMap(byId('map'), (r) => setZoom(r), inspect)
@@ -77,15 +87,42 @@ const weekMap = new WeekMap(byId('week-map'), (d) => {
 const device = byId<HTMLSelectElement>('device'),
   search = byId<HTMLInputElement>('search'),
   src = byId<HTMLSelectElement>('source')
-const dialog = byId<HTMLDialogElement>('dialog')
+const popup = new EntryPopup(byId('entry-popup'))
+const board = new TitleBoard(
+  byId('title-board'),
+  (v, anchor, pin) => {
+    const fields = [
+      ['Application', v.label.app],
+      ['Start', new Date(v.start).toLocaleString()],
+      ['End', new Date(v.end).toLocaleString()],
+      ['Duration', duration(v.end - v.start)],
+      ['Window records', num(v.records)],
+    ]
+    popup.show(
+      anchor,
+      pin,
+      'Window visit',
+      '<h3 class="copy-title">' +
+        esc(v.label.title || 'Untitled window') +
+        '</h3><dl>' +
+        fields
+          .map(
+            ([k, value]) =>
+              '<dt>' + esc(k) + '</dt><dd>' + esc(value) + '</dd>',
+          )
+          .join('') +
+        '</dl>',
+    )
+  },
+  (d) => {
+    period = 'day'
+    save('period', period)
+    changeDate(d)
+  },
+)
 search.value = query
 src.value = source
-function showDialog(title: string, body: string) {
-  byId('dialog-title').textContent = title
-  byId('dialog-body').innerHTML = body
-  if (!dialog.open) dialog.showModal()
-}
-function inspect(e: Entry) {
+function inspect(e: Entry, anchor: HTMLElement, pinned: boolean) {
   const rows = [
     ['Source', kindNames[e.kind]],
     ['Start', new Date(e.start).toLocaleString()],
@@ -93,7 +130,9 @@ function inspect(e: Entry) {
     ['Duration', duration(e.end - e.start)],
     ['Bucket', e.lane],
   ]
-  showDialog(
+  popup.show(
+    anchor,
+    pinned,
     'Event details',
     '<h3><i class="swatch" style="--swatch:' +
       color(e.label) +
@@ -136,7 +175,10 @@ function dates() {
       month: 'short',
       day: 'numeric',
     })
-  byId('date-caption').textContent = weekly
+  const caption = byId<HTMLButtonElement>('date-caption')
+  caption.disabled = weekly
+  caption.title = weekly ? '' : 'Back to week'
+  const captionText = weekly
     ? short(monday) + ' – ' + short(sunday) + ', ' + sunday.slice(0, 4)
     : dt.toLocaleDateString('en-US', {
         weekday: 'long',
@@ -144,6 +186,28 @@ function dates() {
         day: 'numeric',
         year: 'numeric',
       })
+  const mapDate = byId<HTMLTimeElement>('map-date')
+  mapDate.hidden = weekly
+  if (!weekly) {
+    mapDate.dateTime = date
+    mapDate.textContent = dt.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+    byId('day-map-back').setAttribute(
+      'aria-label',
+      'Day map, ' + captionText + ', return to week view',
+    )
+  }
+  caption.innerHTML =
+    '<span>' +
+    esc(captionText) +
+    '</span>' +
+    (weekly
+      ? ''
+      : '<span class="week-return">' + icon('left', 12) + 'Back to week</span>')
   byId('date-label').textContent = weekly
     ? monday === thisWeek
       ? 'This week'
@@ -266,8 +330,39 @@ function drawSparks(series: number[][]) {
   }
 }
 function render(reset: boolean) {
+  popup.close()
   const weekly = period === 'week',
     dateBounds = periodBounds(date, weekly)
+  const titles = showingTitles()
+  if (!titles) board.clearHover()
+  document.body.classList.toggle('titles-mode', titles)
+  const canChooseWeeklyLayout = weekly && tab === 'timeline'
+  byId('weekly-layout').hidden = false
+  byId('weekly-layout').classList.toggle('unavailable', !canChooseWeeklyLayout)
+  byId('weekly-layout').title = canChooseWeeklyLayout
+    ? 'Weekly layout'
+    : 'Available in the weekly timeline'
+  byId('title-board').hidden = !titles
+  byId('timeline-view').hidden = titles || tab === 'events'
+  byId('panels').hidden = titles
+  for (const option of ['titles', 'overview']) {
+    const button = byId<HTMLButtonElement>('layout-' + option)
+    button.disabled = !canChooseWeeklyLayout
+    button.setAttribute(
+      'aria-pressed',
+      String(canChooseWeeklyLayout && layout === option),
+    )
+  }
+  if (titles) {
+    filterSequence++
+    byId('page-title').textContent = 'Weekly timeline'
+    board.set(key(), weekStart(date), titleData, state === 'offline')
+    byId('foot-range').textContent =
+      (titleData?.fetched
+        ? 'Updated ' + time(titleData.fetched, true) + '   ·   '
+        : '') + Intl.DateTimeFormat().resolvedOptions().timeZone
+    return
+  }
   view = weekly
     ? dateBounds
     : custom ||
@@ -292,6 +387,7 @@ function render(reset: boolean) {
       day.fetched ? num(summary.count) : '—',
     ]
     vals.forEach((v, i) => (byId('metric-' + i).textContent = v))
+    byId('day-map-back').hidden = weekly
     byId('map-title').textContent = weekly ? 'Week map' : 'Day map'
     if (weekly)
       byId('map-title').insertAdjacentHTML(
@@ -303,8 +399,8 @@ function render(reset: boolean) {
     byId('day-modes').hidden = weekly
     byId('week-source-field').hidden = !weekly
     byId('map-hint').innerHTML = weekly
-      ? icon('pointer', 13) + 'Select a day to inspect'
-      : icon('zoom', 13) + 'Drag to zoom'
+      ? icon('pointer', 13) + 'Select a day to inspect · Wheel to change week'
+      : icon('zoom', 13) + 'Drag to zoom · Wheel to change day'
     let top = summary.apps.slice(0, 4).map(([name]) => name)
     if (weekly) {
       const data = week || aggregateWeek(empty, weekStart(date))
@@ -360,7 +456,7 @@ function render(reset: boolean) {
           '<span><i class="swatch" style="--swatch:' +
           color(name) +
           '"></i>' +
-          esc(name) +
+          esc(presence && name === 'Away' ? 'Idle' : name) +
           '</span>',
       )
       .join('')
@@ -463,7 +559,10 @@ async function load(refresh = false) {
   const active = new AbortController()
   controller = active
   const local = period === 'day' ? cached(key()) : refresh ? day : undefined
-  if (!refresh) week = undefined
+  if (!refresh) {
+    week = undefined
+    titleData = undefined
+  }
   day = local || empty
   const saved = readSetting<{ key: string; range: Range } | null>('zoom', null)
   custom =
@@ -510,7 +609,17 @@ async function load(refresh = false) {
       custom = z?.key === key() ? z.range : null
     }
     const result = await loadPeriod(
-      { type: 'load', host, date, buckets, weekly: period === 'week', refresh },
+      {
+        type: 'load',
+        host,
+        date,
+        buckets: showingTitles()
+          ? buckets.filter((b) => b.type === 'currentwindow')
+          : buckets,
+        weekly: period === 'week',
+        titles: showingTitles(),
+        refresh,
+      },
       (overview) => {
         if (active.signal.aborted) return
         week = overview
@@ -521,6 +630,7 @@ async function load(refresh = false) {
     )
     if (active.signal.aborted) return
     workerContext = result.context
+    titleData = result.titles
     week = result.week
     if (result.day) {
       day = result.day
@@ -541,6 +651,36 @@ async function load(refresh = false) {
   }
   status()
   render(!refresh)
+  if (
+    titleData &&
+    showingTitles() &&
+    !active.signal.aborted &&
+    state === 'online'
+  ) {
+    const presenceBuckets = buckets.filter(
+      (b) => b.hostname === host && b.type === 'afkstatus',
+    )
+    if (!presenceBuckets.length) {
+      board.setPresence(undefined, 'No presence watcher')
+      return
+    }
+    try {
+      const data = await loadPeriod({
+        type: 'load',
+        host,
+        date,
+        buckets: presenceBuckets,
+        weekly: true,
+        presenceOnly: true,
+        refresh,
+      })
+      if (!active.signal.aborted && showingTitles())
+        board.setPresence(data.presence)
+    } catch {
+      if (!active.signal.aborted && showingTitles())
+        board.setPresence(undefined, 'Presence unavailable')
+    }
+  }
 }
 function changeDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value > today()) return
@@ -554,22 +694,84 @@ function closeDate() {
   byId('date-pop').hidden = true
   byId('open-date').setAttribute('aria-expanded', 'false')
 }
-byId('nav-timeline').onclick = () => setTab('timeline')
-byId('nav-events').onclick = () => setTab('events')
-byId('prev').onclick = () =>
-  changeDate(moveDate(date, period === 'week' ? -7 : -1))
-byId('next').onclick = () => {
-  const next = moveDate(date, period === 'week' ? 7 : 1)
-  changeDate(next > today() ? today() : next)
-}
-for (const p of ['week', 'day'] as const)
-  byId('period-' + p).onclick = () => {
-    if (period === p) return
-    period = p
-    save('period', p)
-    appFilter = ''
+for (const name of ['timeline', 'events'] as const)
+  byId('nav-' + name).onclick = () => {
+    if (tab === name) return
+    const wasTitles = showingTitles()
+    setTab(name)
+    if (wasTitles !== showingTitles()) void load()
+  }
+for (const option of ['titles', 'overview'] as const)
+  byId('layout-' + option).onclick = () => {
+    if (option === layout) return
+    layout = option
+    save('weekly-layout', layout)
     void load()
   }
+function stepPeriod(direction: number) {
+  if (direction > 0 && byId<HTMLButtonElement>('next').disabled) return
+  const next = moveDate(date, direction * (period === 'week' ? 7 : 1))
+  changeDate(next > today() ? today() : next)
+}
+byId('prev').onclick = () => stepPeriod(-1)
+byId('next').onclick = () => stepPeriod(1)
+const dateNavigator = byId('open-date').parentElement!
+dateNavigator.title = 'Wheel up for the previous period, down for the next'
+const chartPanel = byId('map').parentElement!
+const titleBoard = byId('title-board')
+for (const surface of [dateNavigator, chartPanel, titleBoard]) {
+  let wheelDistance = 0,
+    lastWheel = 0
+  surface.addEventListener(
+    'wheel',
+    (e) => {
+      if (
+        e.ctrlKey ||
+        e.metaKey ||
+        e.shiftKey ||
+        e.buttons ||
+        Math.abs(e.deltaX) > Math.abs(e.deltaY) ||
+        !e.deltaY ||
+        !byId('date-pop').hidden
+      )
+        return
+      const target = e.target as Element
+      if (
+        (surface === chartPanel && target.closest('.map-actions')) ||
+        (surface === titleBoard && !target.closest('.col-head'))
+      ) {
+        wheelDistance = 0
+        return
+      }
+      e.preventDefault()
+      const dy = e.deltaY,
+        now = performance.now()
+      if (now - lastWheel > 180 || Math.sign(wheelDistance) !== Math.sign(dy))
+        wheelDistance = 0
+      lastWheel = now
+      wheelDistance += e.deltaMode === 0 ? dy : Math.sign(dy) * 60
+      if (Math.abs(wheelDistance) >= 60) {
+        stepPeriod(Math.sign(wheelDistance))
+        wheelDistance = 0
+      }
+    },
+    { passive: false },
+  )
+  surface.addEventListener('pointerleave', () => {
+    wheelDistance = 0
+  })
+}
+function setPeriod(p: typeof period) {
+  if (period === p) return
+  period = p
+  save('period', p)
+  appFilter = ''
+  void load()
+}
+for (const p of ['week', 'day'] as const)
+  byId('period-' + p).onclick = () => setPeriod(p)
+byId('date-caption').onclick = () => setPeriod('week')
+byId('day-map-back').onclick = () => setPeriod('week')
 byId<HTMLSelectElement>('week-source').onchange = (e) => {
   weekLane = (e.target as HTMLSelectElement).value
   save('week-lane', weekLane)
@@ -640,7 +842,9 @@ src.onchange = () => {
   render(true)
 }
 byId('connection').onclick = () =>
-  showDialog(
+  popup.show(
+    byId('connection'),
+    true,
     'Server connection',
     '<dl><dt>Status</dt><dd>' +
       esc(byId('status').textContent) +
@@ -652,18 +856,5 @@ byId('connection').onclick = () =>
       esc(api) +
       '</dd><dt>Access</dt><dd>Read-only</dd></dl>',
   )
-byId('close-dialog').onclick = () => dialog.close()
-dialog.onclick = (e) => {
-  if (e.target === dialog) {
-    const b = dialog.getBoundingClientRect()
-    if (
-      e.clientX < b.left ||
-      e.clientX > b.right ||
-      e.clientY < b.top ||
-      e.clientY > b.bottom
-    )
-      dialog.close()
-  }
-}
 setTab(tab)
 void load()

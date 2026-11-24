@@ -21,8 +21,8 @@ export class DayMap {
   private hover: number | null = null
   constructor(
     private root: HTMLElement,
-    private zoom: (range: Range) => void,
-    private inspect: (e: Entry) => void,
+    private zoom: (range: Range | null) => void,
+    private inspect: (e: Entry, anchor: HTMLElement, pinned: boolean) => void,
   ) {
     this.labels.className = 'lane-labels'
     this.tip.className = 'map-tip'
@@ -60,10 +60,19 @@ export class DayMap {
           '</b>' +
           (entry
             ? '<span>' +
-              esc(entry.label) +
+              esc(
+                entry.kind === 'presence' && entry.label === 'Away'
+                  ? 'Idle'
+                  : entry.label,
+              ) +
               ' · ' +
               esc(duration(entry.end - entry.start)) +
-              '</span>'
+              '</span>' +
+              (entry.detail
+                ? '<strong class="map-tip-title">' +
+                  esc(entry.detail) +
+                  '</strong>'
+                : '')
             : '')
         this.tip.hidden = false
         this.tip.style.left =
@@ -74,7 +83,7 @@ export class DayMap {
               this.canvas.offsetLeft + x + 10,
             ),
           ) + 'px'
-        this.tip.style.top = Math.max(0, y - 48) + 'px'
+        this.tip.style.top = Math.max(0, y - this.tip.offsetHeight - 8) + 'px'
       }
       this.draw()
     }
@@ -89,7 +98,10 @@ export class DayMap {
         this.zoom([this.at(Math.min(x, a)), this.at(Math.max(x, a))])
       else {
         const entry = this.hit(x, y)
-        if (entry) this.inspect(entry)
+        if (entry) {
+          this.tip.hidden = true
+          this.inspect(entry, this.canvas, true)
+        }
       }
       this.draw()
     }
@@ -98,6 +110,7 @@ export class DayMap {
       this.hover = null
       this.draw()
     }
+    this.canvas.ondblclick = () => this.zoom(null)
     this.canvas.onpointerleave = () => {
       this.tip.hidden = true
       if (!this.gesture) {
@@ -171,10 +184,6 @@ export class DayMap {
       span = b - a,
       xpos = (ms: number) => ((ms - a) / span) * w
     const trackY = (i: number) => top + i * row + 7
-    this.tracks.forEach((_, i) => {
-      ctx.fillStyle = '#2d354a'
-      ctx.fillRect(0, trackY(i), w, 24)
-    })
     const steps = [
       1000, 5000, 15000, 30000, 60000, 300000, 900000, 1800000, 3600000,
       7200000, 10800000, 21600000, 43200000,
@@ -217,9 +226,13 @@ export class DayMap {
           ctx.rect(x + 4, y, width - 8, 24)
           ctx.clip()
           ctx.font = '500 11px Inter Variable, sans-serif'
-          ctx.fillStyle = e.label === 'Away' ? '#fff' : '#182034'
+          ctx.fillStyle = '#182034'
           ctx.textAlign = 'left'
-          ctx.fillText(e.label, x + 7, y + 16)
+          ctx.fillText(
+            e.kind === 'presence' && e.label === 'Away' ? 'Idle' : e.label,
+            x + 7,
+            y + 16,
+          )
           ctx.restore()
         }
       }
