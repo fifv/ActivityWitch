@@ -39,7 +39,7 @@ const button = (id: string, name: Icon, label: string) =>
   '</button>'
 export function mountWorkspace(root: HTMLElement) {
   root.innerHTML = `
-<header class="mast"><div class="brand"><img src="/mark.svg" width="33" height="33" alt=""><span>Activity<strong>Witch</strong></span></div>
+<header class="mast"><div class="brand"><img src="${import.meta.env.BASE_URL}mark.svg" width="33" height="33" alt=""><span>Activity<strong>Witch</strong></span></div>
 <nav aria-label="Workspace"><button id="nav-timeline">${icon('timeline')}Timeline</button><button id="nav-events">${icon('list')}Event log</button></nav>
 <div class="mast-right"><span class="readonly">${icon('lock', 13)}Read-only</span><button id="connection" title="ActivityWatch connection details"><i class="status-dot"></i><span id="status">Connecting</span>${icon('down', 12)}</button></div></header>
 <main>

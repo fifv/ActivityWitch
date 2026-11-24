@@ -21,6 +21,10 @@ npm run preview
 
 Stop the dev server before starting preview on port 5177. The built `dist/` directory can also be served by a local static HTTP server. Set `VITE_AW_API_BASE` in `.env.local` and restart Vite or rebuild to use another ActivityWatch API address.
 
+## GitHub Pages
+
+[Open the hosted timeline](https://fifv.github.io/ActivityWitch/). It connects directly to ActivityWatch on the device running the browser. To use the hosted UI with the Rust server, add `https://fifv.github.io` to the top-level `cors` array in the config file below. Preserve existing origins and restart ActivityWatch. GitHub Pages projects under the same hostname share this permission.
+
 ## Origin settings
 
 The ActivityWatch Rust server detected on this machine already accepts `http://localhost:5177`. Use that exact spelling in the address bar. A different hostname or port is a different browser origin.

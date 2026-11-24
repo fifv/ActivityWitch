@@ -8,4 +8,4 @@ const localServer = {
   cors: false,
 }
 
-export default defineConfig({ server: localServer, preview: localServer })
+export default defineConfig({ base: './', server: localServer, preview: localServer })
